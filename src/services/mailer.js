@@ -1,37 +1,59 @@
-/**
- * ENSEM ACCESS – Service Email (simulé pour prototype)
- *
- * Pour la production : configurer les variables d'environnement SMTP
- * et décommenter la section nodemailer réelle.
- *
- * Variables d'environnement:
- *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL
- */
+const nodemailer = require('nodemailer');
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ceremonie-access.web.app';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ensem.ac.ma';
+const FROM_NAME = process.env.FROM_NAME || 'ENSEM ACCESS';
 
 /**
- * Simule l'envoi d'un email (log console en mode prototype).
- * Remplacer par nodemailer en production.
+ * Crée le transporteur SMTP.
+ * Variables d'environnement requises en production :
+ *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+ */
+function createTransporter() {
+  if (!process.env.SMTP_USER) {
+    return null; // Mode dev : log console
+  }
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
+
+/**
+ * Envoie un email réel via SMTP ou log console en dev.
  */
 async function sendEmail({ to, subject, html }) {
-  // ── PRODUCTION : décommenter et configurer nodemailer ──
-  // const nodemailer = require('nodemailer');
-  // const transporter = nodemailer.createTransport({
-  //   host: process.env.SMTP_HOST,
-  //   port: parseInt(process.env.SMTP_PORT || '587'),
-  //   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  // });
-  // await transporter.sendMail({ from: FROM_EMAIL, to, subject, html });
+  const transporter = createTransporter();
 
-  // ── PROTOTYPE : log console ──
-  console.log('\n📧 ══════════════════════════════════════');
-  console.log(`   À       : ${to}`);
-  console.log(`   Sujet   : ${subject}`);
-  console.log(`   Contenu : ${html.replace(/<[^>]+>/g, '').slice(0, 200)}...`);
-  console.log('══════════════════════════════════════\n');
-  return true;
+  if (!transporter) {
+    // ── Mode dev : affichage console ──
+    console.log('\n📧 ══════════════════════════════════════');
+    console.log(`   À       : ${to}`);
+    console.log(`   Sujet   : ${subject}`);
+    console.log(`   Contenu : ${html.replace(/<[^>]+>/g, '').slice(0, 200)}...`);
+    console.log('══════════════════════════════════════\n');
+    return { dev: true };
+  }
+
+  // ── Mode production : envoi réel ──
+  try {
+    const info = await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log(`✅ Email envoyé à ${to} — MessageId: ${info.messageId}`);
+    return info;
+  } catch (err) {
+    console.error(`❌ Erreur envoi email à ${to}:`, err.message);
+    throw err;
+  }
 }
 
 /**
