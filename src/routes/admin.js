@@ -147,16 +147,17 @@ router.put('/validate/:userId', requireAuth(['admin']), async (req, res) => {
       // Lier à un lauréat (si non déjà lié)
       let laureat = await store.getLaureatByUserId(req.params.userId);
       if (!laureat && laureat_id) {
+        // Lier le compte à un lauréat existant (importé via CSV)
         laureat = await store.getLaureatById(laureat_id);
         if (laureat) {
-           // We'd update user_id in firestore for laureat here
-           // Not doing it in this simple rebuild for brevity unless it breaks things
+          await store.linkUserToLaureat(laureat_id, req.params.userId);
+          laureat = await store.getLaureatById(laureat_id); // Recharger avec user_id
         }
       }
       if (!laureat) {
         // Créer un lauréat automatiquement depuis les infos du compte
         laureat = await store.createLaureat({
-          userId: req.params.userId,
+          user_id: req.params.userId,
           nom: user.nom,
           prenom: user.prenom,
           email: user.email,

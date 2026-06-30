@@ -92,6 +92,14 @@ async function getLaureatByEmail(email) {
   return snapshot.empty ? null : snapshot.docs[0].data();
 }
 
+async function linkUserToLaureat(laureatId, userId) {
+  await db.collection('laureats').doc(laureatId).update({
+    user_id: userId,
+    updated_at: new Date().toISOString(),
+  });
+  return true;
+}
+
 async function getAllLaureats(filters = {}) {
   let query = db.collection('laureats');
   if (filters.filiere) query = query.where('filiere', '==', filters.filiere);
@@ -250,7 +258,7 @@ async function bulkImportLaureats(rows) {
 
 module.exports = {
   createUser, getUserById, getUserByEmail, getUserByCIN, updateUserStatus, verifyUserEmail, getAllPendingUsers, getAllUsers,
-  createLaureat, getLaureatById, getLaureatByUserId, getLaureatByEmail, getAllLaureats, updateLaureatQuota, markLaureatPresent, setLaureatPassGenerated, searchLaureatsByName, bulkImportLaureats,
+  createLaureat, getLaureatById, getLaureatByUserId, getLaureatByEmail, linkUserToLaureat, getAllLaureats, updateLaureatQuota, markLaureatPresent, setLaureatPassGenerated, searchLaureatsByName, bulkImportLaureats,
   registerToken, getToken, markTokenUsed, getAllActiveTokens,
   recordScan, getAllScans, getRecentScans,
   getStats,
