@@ -74,7 +74,7 @@ function nameSimilarity(nom1, prenom1, nom2, prenom2) {
 async function checkDuplicates({ cin, email, nom, prenom }) {
   // 1. Vérification CIN exact
   if (cin) {
-    const existing = getUserByCIN(cin);
+    const existing = await getUserByCIN(cin);
     if (existing) {
       return {
         hasDuplicate: true,
@@ -87,7 +87,7 @@ async function checkDuplicates({ cin, email, nom, prenom }) {
 
   // 2. Vérification email exact
   if (email) {
-    const existing = getUserByEmail(email);
+    const existing = await getUserByEmail(email);
     if (existing) {
       return {
         hasDuplicate: true,
@@ -101,7 +101,7 @@ async function checkDuplicates({ cin, email, nom, prenom }) {
   // 3. Vérification fuzzy sur nom + prénom
   const similarUsers = [];
   if (nom && prenom) {
-    const allUsers = getAllUsers();
+    const allUsers = await getAllUsers();
     for (const user of allUsers) {
       if (user.role === 'admin') continue;
       const score = nameSimilarity(nom, prenom, user.nom, user.prenom);
@@ -117,7 +117,7 @@ async function checkDuplicates({ cin, email, nom, prenom }) {
     }
 
     // Aussi vérifier dans les lauréats importés via CSV
-    const allLaureats = getAllLaureats();
+    const allLaureats = await getAllLaureats();
     for (const l of allLaureats) {
       const score = nameSimilarity(nom, prenom, l.nom, l.prenom);
       if (score >= 0.85) {
