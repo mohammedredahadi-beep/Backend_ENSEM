@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Build output
+frontend/dist/
+frontend/.env.local
+frontend/.env.production
+
+# Firebase
+.firebase/
+.firebaserc
+
+# Environment & secrets
+.env
+.env.*
+backend/.env
+serviceAccountKey.json
+*-service-account*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
