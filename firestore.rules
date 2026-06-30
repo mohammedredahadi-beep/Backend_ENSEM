@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Fonctions utilitaires ─────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAgent() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'agent';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ─── Collection : users ────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Lecture : l'utilisateur lui-même ou un admin
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Création : uniquement lors de l'inscription (utilisateur authentifié)
+      allow create: if isOwner(userId) &&
+        request.resource.data.role in ['laureate', 'agent'] &&
+        request.resource.data.status == 'email_non_verifie';
+
+      // Modification : uniquement par l'admin (validation, statut)
+      allow update: if isAdmin();
+
+      // Suppression : uniquement par l'admin
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection : laureats ─────────────────────────────────────────────────
+    match /laureats/{laureatId} {
+      // Lecture : l'admin, les agents, ou le lauréat propriétaire
+      allow read: if isAdmin() || isAgent() ||
+        (isAuthenticated() && resource.data.user_id == request.auth.uid);
+
+      // Création : uniquement par le backend (via Admin SDK) → jamais depuis le client
+      allow create: if false;
+
+      // Modification : admin uniquement (quota, présence)
+      allow update: if isAdmin();
+
+      // Suppression : jamais depuis le client
+      allow delete: if false;
+    }
+
+    // ─── Collection : tokens (JTI QR codes) ───────────────────────────────────
+    match /tokens/{jti} {
+      // Lecture/écriture : uniquement via le backend (Admin SDK)
+      // Le client ne doit jamais accéder directement à cette collection
+      allow read, write: if false;
+    }
+
+    // ─── Collection : scans (journal d'audit) ─────────────────────────────────
+    match /scans/{scanId} {
+      // Lecture : admin et agents uniquement
+      allow read: if isAdmin() || isAgent();
+
+      // Écriture : uniquement via le backend (Admin SDK)
+      allow write: if false;
+    }
+
+    // ─── Collection : inviteCodes ──────────────────────────────────────────────
+    match /inviteCodes/{code} {
+      // Lecture : admin uniquement
+      allow read: if isAdmin();
+
+      // Écriture : uniquement via le backend
+      allow write: if false;
+    }
+
+  }
+}

@@ -26,9 +26,15 @@ function requireAuth(roles = []) {
       const user = {
         sub: decodedToken.uid,
         email: decodedToken.email,
+        email_verified: decodedToken.email_verified,
         role: userData.role,
         status: userData.status,
       };
+
+      // Vérifier que l'email est confirmé (sauf pour les routes auth)
+      if (!user.email_verified && !req.path.includes('/verify-email')) {
+        return res.status(403).json({ error: 'Email non vérifié. Vérifiez votre boîte mail.' });
+      }
 
       if (roles.length > 0 && !roles.includes(user.role)) {
         return res.status(403).json({ error: 'Accès refusé : rôle insuffisant' });

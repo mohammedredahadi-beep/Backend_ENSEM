@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 const { initKeys } = require('./services/jwt');
 
 const authRoutes = require('./routes/auth');
@@ -10,6 +11,27 @@ const scanRoutes = require('./routes/scan');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// ─── Sécurité : Rate Limiting ─────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const scanLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120,            // Max 2 scans/sec par IP
+  message: { error: 'Trop de requêtes de scan.' },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { error: 'Trop de requêtes. Réessayez dans 15 minutes.' },
+});
 
 // Autoriser CORS pour le frontend (Firebase Hosting ou localhost)
 const allowedOrigins = ['http://localhost:5173', 'https://ceremonie-access.web.app', 'https://ceremonie-access.firebaseapp.com'];
@@ -36,11 +58,13 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Routes
+// Routes avec rate limiting
+app.use('/auth', apiLimiter);
+app.use('/auth/login', loginLimiter);
 app.use('/auth', authRoutes);
-app.use('/admin', adminRoutes);
-app.use('/pass', passRoutes);
-app.use('/scan', scanRoutes);
+app.use('/admin', apiLimiter, adminRoutes);
+app.use('/pass', apiLimiter, passRoutes);
+app.use('/scan', scanLimiter, scanRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
