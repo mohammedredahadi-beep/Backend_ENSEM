@@ -11,7 +11,19 @@ const { requireAuth } = require('../middleware/auth');
 
 router.get('/my-pass', requireAuth(['laureate']), async (req, res) => {
   try {
-    const laureat = await store.getLaureatByUserId(req.user.sub);
+    // Recherche par user_id (Firebase UID)
+    let laureat = await store.getLaureatByUserId(req.user.sub);
+
+    // Fallback : recherche par email si user_id ne matche pas encore
+    if (!laureat && req.user.email) {
+      laureat = await store.getLaureatByEmail(req.user.email);
+      if (laureat) {
+        // Lier automatiquement le user_id pour les prochaines fois
+        await store.linkUserToLaureat(laureat.id, req.user.sub);
+        console.log(`Auto-linked user ${req.user.sub} to laureat ${laureat.id}`);
+      }
+    }
+
     if (!laureat) {
       return res.status(404).json({ error: 'Aucun pass trouvé. Votre compte est peut-être en attente de validation.' });
     }

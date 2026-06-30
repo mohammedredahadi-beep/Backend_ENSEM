@@ -84,12 +84,16 @@ async function getLaureatById(id) {
 
 async function getLaureatByUserId(userId) {
   const snapshot = await db.collection('laureats').where('user_id', '==', userId).limit(1).get();
-  return snapshot.empty ? null : snapshot.docs[0].data();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() };
 }
 
 async function getLaureatByEmail(email) {
   const snapshot = await db.collection('laureats').where('email', '==', email.toLowerCase().trim()).limit(1).get();
-  return snapshot.empty ? null : snapshot.docs[0].data();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() };
 }
 
 async function linkUserToLaureat(laureatId, userId) {
