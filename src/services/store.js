@@ -45,7 +45,10 @@ async function verifyUserEmail(userId) {
 }
 
 async function getAllPendingUsers() {
-  const snapshot = await db.collection('users').where('status', '==', 'email_verifie').where('role', '==', 'laureate').get();
+  const snapshot = await db.collection('users')
+    .where('status', 'in', ['email_verifie', 'email_non_verifie'])
+    .where('role', '==', 'laureate')
+    .get();
   return snapshot.docs.map(doc => doc.data());
 }
 
