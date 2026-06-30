@@ -23,7 +23,7 @@ router.post('/validate', requireAuth(['agent', 'admin']), async (req, res) => {
 
     if (!valid) {
       const action = error?.includes('expiré') ? 'expire' : 'token_invalide';
-      await store.({ laureatId: null, agentId, deviceId: device_id, action, ipAddress, motifRefus: error });
+      await store.recordScan({ laureatId: null, agentId, deviceId: device_id, action, ipAddress, motifRefus: error });
       return res.status(200).json({
         valid: false,
         action,
@@ -36,9 +36,9 @@ router.post('/validate', requireAuth(['agent', 'admin']), async (req, res) => {
     const jti = claims.jti;
 
     // 2. Vérification double scan
-    const  = await store.(jti);
+    const tokenRecord = await store.getToken(jti);
     if (tokenRecord && tokenRecord.used) {
-      await store.({ laureatId, agentId, deviceId: device_id, action: 'double_scan', ipAddress, motifRefus: 'Token déjà utilisé' });
+      await store.recordScan({ laureatId, agentId, deviceId: device_id, action: 'double_scan', ipAddress, motifRefus: 'Token déjà utilisé' });
       return res.status(200).json({
         valid: false,
         action: 'double_scan',
@@ -49,16 +49,16 @@ router.post('/validate', requireAuth(['agent', 'admin']), async (req, res) => {
     }
 
     // 3. Récupérer le lauréat
-    const  = await store.(laureatId);
+    const laureat = await store.getLaureatById(laureatId);
     if (!laureat) {
-      await store.({ laureatId, agentId, deviceId: device_id, action: 'token_invalide', ipAddress, motifRefus: 'Lauréat non trouvé' });
+      await store.recordScan({ laureatId, agentId, deviceId: device_id, action: 'token_invalide', ipAddress, motifRefus: 'Lauréat non trouvé' });
       return res.status(200).json({ valid: false, action: 'token_invalide', motif: 'Lauréat introuvable.', color: 'red' });
     }
 
     // 4. Vérifier quota invités (si demandé)
     const { invites_count = 0 } = req.body;
     if (invites_count > laureat.quota_invites) {
-      await store.({ laureatId, agentId, deviceId: device_id, action: 'quota_depasse', ipAddress, motifRefus: `Quota dépassé: ${invites_count} > ${laureat.quota_invites}` });
+      await store.recordScan({ laureatId, agentId, deviceId: device_id, action: 'quota_depasse', ipAddress, motifRefus: `Quota dépassé: ${invites_count} > ${laureat.quota_invites}` });
       return res.status(200).json({
         valid: false,
         action: 'quota_depasse',
@@ -70,10 +70,10 @@ router.post('/validate', requireAuth(['agent', 'admin']), async (req, res) => {
 
     // 5. ✅ Tout est valide → marquer le token comme utilisé
     if (tokenRecord) {
-      await store.(jti, agentId);
+      await store.markTokenUsed(jti, agentId);
     }
-    await store.(laureatId, invites_count);
-    await store.({ laureatId, agentId, deviceId: device_id, action: 'succes', ipAddress });
+    await store.markLaureatPresent(laureatId, invites_count);
+    await store.recordScan({ laureatId, agentId, deviceId: device_id, action: 'succes', ipAddress });
 
     res.json({
       valid: true,
@@ -107,7 +107,7 @@ router.get('/audit', requireAuth(['agent', 'admin']), async (req, res) => {
   const { agentId } = req.query;
   const filters = req.user.role === 'agent' ? { agentId: req.user.sub } : {};
   if (agentId && req.user.role === 'admin') filters.agentId = agentId;
-  res.json(await store.(filters));
+  res.json(await store.getAllScans(filters));
 });
 
 module.exports = router;

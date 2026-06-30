@@ -9,9 +9,9 @@ const { requireAuth } = require('../middleware/auth');
 // ─── GET /api/pass/my-pass ────────────────────────────────────────────────────
 // Récupère le pass du lauréat connecté avec un QR code fraîchement généré (anti-screenshot)
 
-router.get('/my-pass', requireAuth(['laureate']), async async (req, res) => {
+router.get('/my-pass', requireAuth(['laureate']), async (req, res) => {
   try {
-    const  = await store.(req.user.sub);
+    const laureat = await store.getLaureatByUserId(req.user.sub);
     if (!laureat) {
       return res.status(404).json({ error: 'Aucun pass trouvé. Votre compte est peut-être en attente de validation.' });
     }
@@ -22,7 +22,7 @@ router.get('/my-pass', requireAuth(['laureate']), async async (req, res) => {
     const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
     // Enregistrer le JTI (pour tracking et invalidation)
-    await store.(claims.jti, laureat.id, claims.exp);
+    await store.registerToken(claims.jti, laureat.id, claims.exp);
 
     // Générer l'image QR
     const qrDataUrl = await QRCode.toDataURL(token, {
