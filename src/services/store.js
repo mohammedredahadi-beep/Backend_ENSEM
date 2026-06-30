@@ -13,18 +13,18 @@ async function createUser(userData) {
 
 async function getUserById(id) {
   const doc = await db.collection('users').doc(id).get();
-  return doc.exists ? doc.data() : null;
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
 }
 
 async function getUserByEmail(email) {
   const snapshot = await db.collection('users').where('email', '==', email.toLowerCase().trim()).limit(1).get();
-  return snapshot.empty ? null : snapshot.docs[0].data();
+  return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
 }
 
 async function getUserByCIN(cin) {
   if (!cin) return null;
   const snapshot = await db.collection('users').where('cin', '==', cin.toUpperCase().trim()).limit(1).get();
-  return snapshot.empty ? null : snapshot.docs[0].data();
+  return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
 }
 
 async function updateUserStatus(userId, status) {
@@ -49,7 +49,7 @@ async function getAllPendingUsers() {
     .where('status', 'in', ['email_verifie', 'email_non_verifie'])
     .where('role', '==', 'laureate')
     .get();
-  return snapshot.docs.map(doc => doc.data());
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function getAllUsers(filters = {}) {
@@ -57,7 +57,7 @@ async function getAllUsers(filters = {}) {
   if (filters.role) query = query.where('role', '==', filters.role);
   if (filters.status) query = query.where('status', '==', filters.status);
   const snapshot = await query.get();
-  return snapshot.docs.map(doc => doc.data());
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function createLaureat(laureatData) {
