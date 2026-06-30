@@ -14,12 +14,21 @@ let publicKey = null;
  * Si les clés n'existent pas, elles sont générées automatiquement.
  */
 async function initKeys() {
+  // ─── Priorité 1 : Variables d'environnement (Production / Render) ───────────
+  if (process.env.PRIVATE_KEY && process.env.PUBLIC_KEY) {
+    privateKey = process.env.PRIVATE_KEY.replace(/\\n/g, '\n');
+    publicKey = process.env.PUBLIC_KEY.replace(/\\n/g, '\n');
+    console.log('🔑 Clés RSA chargées depuis les variables d\'environnement.');
+    return;
+  }
+
+  // ─── Priorité 2 : Disque local (Développement) ──────────────────────────────
   if (!fs.existsSync(KEYS_DIR)) fs.mkdirSync(KEYS_DIR, { recursive: true });
 
   if (fs.existsSync(PRIVATE_KEY_PATH) && fs.existsSync(PUBLIC_KEY_PATH)) {
     privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
     publicKey = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
-    console.log('🔑 Clés RSA chargées depuis le disque.');
+    console.log('🔑 Clés RSA chargées depuis le disque (dev local).');
   } else {
     console.log('🔑 Génération d\'une nouvelle paire de clés RSA 2048-bit...');
     const { privateKey: priv, publicKey: pub } = generateKeyPairSync('rsa', {
@@ -32,6 +41,10 @@ async function initKeys() {
     fs.writeFileSync(PRIVATE_KEY_PATH, privateKey, { mode: 0o600 });
     fs.writeFileSync(PUBLIC_KEY_PATH, publicKey);
     console.log('✅ Clés RSA générées et sauvegardées.');
+    // Afficher les clés pour les copier dans les env vars Render
+    console.log('\n⚠️  IMPORTANT: Copiez ces clés dans vos variables d\'environnement Render:');
+    console.log('PRIVATE_KEY=', privateKey.replace(/\n/g, '\\n'));
+    console.log('PUBLIC_KEY=', publicKey.replace(/\n/g, '\\n'));
   }
 }
 
