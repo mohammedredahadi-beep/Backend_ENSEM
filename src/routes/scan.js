@@ -113,6 +113,61 @@ router.post('/validate', requireAuth(['agent', 'admin']), async (req, res) => {
   }
 });
 
+// ─── GET /api/scan/absents ───────────────────────────────────────────────────
+// Récupère la liste de secours des lauréats non encore rentrés
+router.get('/absents', requireAuth(['agent', 'admin']), async (req, res) => {
+  try {
+    const absents = await store.getAbsentLaureats();
+    res.json(absents);
+  } catch (e) {
+    console.error('Get absents error:', e);
+    res.status(500).json({ error: 'Erreur lors de la récupération des absents.' });
+  }
+});
+
+// ─── POST /api/scan/validate-manual ──────────────────────────────────────────
+// Validation manuelle de l'entrée d'un lauréat (secours)
+router.post('/validate-manual', requireAuth(['agent', 'admin']), async (req, res) => {
+  try {
+    const { laureat_id, invites_count = 0, device_id = 'web' } = req.body;
+    const agentId = req.user.sub;
+    const ipAddress = req.ip || req.connection.remoteAddress;
+
+    if (!laureat_id) return res.status(400).json({ error: 'ID Lauréat requis.' });
+
+    const laureat = await store.getLaureatById(laureat_id);
+    if (!laureat) return res.status(404).json({ error: 'Lauréat non trouvé.' });
+
+    if (laureat.present) {
+      return res.status(400).json({ error: 'Ce lauréat est déjà marqué présent.' });
+    }
+
+    if (invites_count > laureat.quota_invites) {
+      return res.status(400).json({ error: `Quota dépassé (${invites_count} > ${laureat.quota_invites}).` });
+    }
+
+    await store.markLaureatPresent(laureat_id, invites_count);
+    await store.recordScan({ 
+      laureatId: laureat_id, 
+      agentId, 
+      deviceId: device_id, 
+      action: 'succes_manuel', 
+      ipAddress, 
+      invites_count 
+    });
+
+    res.json({
+      valid: true,
+      action: 'succes_manuel',
+      laureat,
+      message: `✅ Entrée validée manuellement – ${laureat.prenom} ${laureat.nom} + ${invites_count} invité(s)`
+    });
+  } catch (e) {
+    console.error('Manual validation error:', e);
+    res.status(500).json({ error: 'Erreur lors de la validation manuelle.' });
+  }
+});
+
 // ─── GET /api/scan/public-key ─────────────────────────────────────────────────
 
 router.get('/public-key', requireAuth(['agent', 'admin']), async (req, res) => {

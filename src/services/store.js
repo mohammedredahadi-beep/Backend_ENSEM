@@ -117,7 +117,12 @@ async function getAllLaureats(filters = {}) {
   if (filters.filiere) query = query.where('filiere', '==', filters.filiere);
   if (filters.present !== undefined) query = query.where('present', '==', filters.present);
   const snapshot = await query.get();
-  return snapshot.docs.map(doc => doc.data());
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function getAbsentLaureats() {
+  const snapshot = await db.collection('laureats').where('present', '==', false).get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function updateLaureatQuota(id, quota) {
@@ -327,5 +332,5 @@ module.exports = {
   recordScan, getAllScans, getRecentScans,
   getStats,
   createInviteCode, useInviteCode, isInviteCodeValid,
-  isEmailAuthorized, completeLaureatProfile
+  isEmailAuthorized, completeLaureatProfile, getAbsentLaureats
 };
