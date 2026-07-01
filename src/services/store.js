@@ -133,6 +133,35 @@ async function updateLaureatQuota(id, quota) {
   return true;
 }
 
+async function updateLaureat(id, updates) {
+  const doc = await db.collection('laureats').doc(id).get();
+  if (!doc.exists) return false;
+  // Filtrer les champs undefined
+  const clean = Object.fromEntries(
+    Object.entries(updates).filter(([, v]) => v !== undefined)
+  );
+  await db.collection('laureats').doc(id).update({
+    ...clean,
+    updated_at: new Date().toISOString(),
+  });
+  return true;
+}
+
+async function deleteLaureat(id) {
+  const doc = await db.collection('laureats').doc(id).get();
+  if (!doc.exists) return false;
+  await db.collection('laureats').doc(id).delete();
+  return true;
+}
+
+async function setLaureatPresence(id, present) {
+  await db.collection('laureats').doc(id).update({
+    present: !!present,
+    updated_at: new Date().toISOString(),
+  });
+  return true;
+}
+
 async function markLaureatPresent(laureatId, invitesCount = 0) {
   await db.collection('laureats').doc(laureatId).update({
     present: true,
@@ -371,7 +400,9 @@ async function bulkImportLaureats(rows) {
 
 module.exports = {
   createUser, getUserById, getUserByEmail, getUserByCIN, updateUserStatus, verifyUserEmail, getAllPendingUsers, getAllUsers,
-  createLaureat, getLaureatById, getLaureatByUserId, getLaureatByEmail, linkUserToLaureat, getAllLaureats, updateLaureatQuota, markLaureatPresent, setLaureatPassGenerated, searchLaureatsByName, bulkImportLaureats,
+  createLaureat, getLaureatById, getLaureatByUserId, getLaureatByEmail, linkUserToLaureat, getAllLaureats,
+  updateLaureatQuota, updateLaureat, deleteLaureat, setLaureatPresence,
+  markLaureatPresent, setLaureatPassGenerated, searchLaureatsByName, bulkImportLaureats,
   registerToken, getToken, markTokenUsed, getAllActiveTokens,
   recordScan, getAllScans, getRecentScans,
   getStats,

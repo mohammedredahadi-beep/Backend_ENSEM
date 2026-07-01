@@ -52,6 +52,76 @@ router.get('/laureats', requireAuth(['admin']), async (req, res) => {
   res.json(laureats);
 });
 
+// ─── Ajouter un lauréat manuellement ─────────────────────────────────────────
+
+router.post('/laureats', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { nom_complet, email, filiere, cin, telephone, quota_invites } = req.body;
+    if (!nom_complet || !email) {
+      return res.status(400).json({ error: 'Nom complet et email sont requis' });
+    }
+    const existing = await store.getLaureatByEmail(email);
+    if (existing) return res.status(409).json({ error: 'Un lauréat avec cet email existe déjà' });
+
+    const laureat = await store.createLaureat({
+      nom_complet: nom_complet.trim().toUpperCase(),
+      email: email.toLowerCase().trim(),
+      filiere: filiere || 'Non spécifiée',
+      cin: cin ? cin.toUpperCase().trim() : null,
+      telephone: telephone || null,
+      quota_invites: parseInt(quota_invites || 2, 10),
+      photo_url: null,
+    });
+    res.status(201).json(laureat);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Modifier un lauréat (nom, filière, email, cin, téléphone, quota) ─────────
+
+router.put('/laureats/:id', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { nom_complet, email, filiere, cin, telephone, quota_invites } = req.body;
+    const ok = await store.updateLaureat(req.params.id, {
+      nom_complet: nom_complet ? nom_complet.trim().toUpperCase() : undefined,
+      email: email ? email.toLowerCase().trim() : undefined,
+      filiere,
+      cin: cin ? cin.toUpperCase().trim() : null,
+      telephone: telephone || null,
+      quota_invites: quota_invites !== undefined ? parseInt(quota_invites, 10) : undefined,
+    });
+    if (!ok) return res.status(404).json({ error: 'Lauréat non trouvé' });
+    res.json({ message: 'Lauréat mis à jour' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Supprimer un lauréat ─────────────────────────────────────────────────────
+
+router.delete('/laureats/:id', requireAuth(['admin']), async (req, res) => {
+  try {
+    const ok = await store.deleteLaureat(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Lauréat non trouvé' });
+    res.json({ message: 'Lauréat supprimé' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Basculer présence manuellement ──────────────────────────────────────────
+
+router.put('/laureats/:id/presence', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { present } = req.body;
+    await store.setLaureatPresence(req.params.id, !!present);
+    res.json({ message: 'Présence mise à jour', present: !!present });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Modifier quota invités ───────────────────────────────────────────────────
 
 router.put('/laureats/:id/quota', requireAuth(['admin']), async (req, res) => {
