@@ -1,37 +1,17 @@
-const nodemailer = require('nodemailer');
-
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ceremonie-access.web.app';
-const FROM_EMAIL   = process.env.FROM_EMAIL   || 'noreply@ensem.ac.ma';
+const FROM_EMAIL   = process.env.FROM_EMAIL   || 'onboarding@resend.dev'; // Remplacer par votre e-mail d'envoi configuré sur Brevo
 const FROM_NAME    = process.env.FROM_NAME    || 'ENSEM ACCESS';
 
 /**
- * Crée le transporteur SMTP sécurisé pour l'envoi d'emails.
- * Variables d'environnement en production :
- *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE
- */
-function createTransporter() {
-  if (!process.env.SMTP_USER) {
-    return null; // Mode dev : log console uniquement
-  }
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true', // true pour le port 465, false pour 587 ou autre
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
-/**
- * Envoie un email en utilisant SMTP sécurisé (Nodemailer) ou log console en mode dev.
+ * Envoie un email via l'API REST de Brevo (Sendinblue).
+ * Évite les blocages de ports SMTP et les vérifications de domaine strictes.
+ * Variable d'environnement requise : BREVO_API_KEY
  */
 async function sendEmail({ to, subject, html }) {
-  const transporter = createTransporter();
+  const apiKey = process.env.BREVO_API_KEY;
 
-  if (!transporter) {
-    // ── Mode dev : affichage console ──
+  if (!apiKey) {
+    // ── Mode dev : log console uniquement ──
     console.log('\n📧 ══════════════════════════════════════');
     console.log(`   À       : ${to}`);
     console.log(`   Sujet   : ${subject}`);
@@ -40,16 +20,33 @@ async function sendEmail({ to, subject, html }) {
     return { dev: true };
   }
 
-  // ── Mode production : envoi réel via SMTP ──
+  // ── Mode production : envoi via Brevo API ──
   try {
-    const info = await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to,
-      subject,
-      html,
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: FROM_NAME, email: FROM_EMAIL },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: html
+      })
     });
-    console.log(`✅ Email envoyé à ${to} — MessageId: ${info.messageId}`);
-    return info;
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const msg = data?.message || JSON.stringify(data);
+      console.error(`❌ Erreur Brevo (${res.status}) pour ${to}: ${msg}`);
+      throw new Error(`Brevo error ${res.status}: ${msg}`);
+    }
+
+    console.log(`✅ Email envoyé à ${to} via Brevo — MessageId: ${data.messageId || 'inconnu'}`);
+    return data;
   } catch (err) {
     console.error(`❌ Erreur envoi email à ${to}:`, err.message);
     throw err;
