@@ -1,6 +1,8 @@
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ceremonie-access.web.app';
-const FROM_EMAIL   = process.env.FROM_EMAIL   || 'onboarding@resend.dev';  // domaine Resend gratuit
-const FROM_NAME    = process.env.FROM_NAME    || 'ENSEM ACCESS';
+// Utiliser onboarding@resend.dev (domaine pré-vérifié par Resend, gratuit et fonctionnel immédiatement)
+// Pour utiliser votre propre domaine, vérifiez-le sur https://resend.com/domains
+const FROM_EMAIL   = process.env.RESEND_FROM || 'onboarding@resend.dev';
+const FROM_NAME    = process.env.FROM_NAME   || 'ENSEM ACCESS';
 
 /**
  * Envoie un email via l'API Resend (https://resend.com)
