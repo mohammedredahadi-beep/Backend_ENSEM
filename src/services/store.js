@@ -28,10 +28,18 @@ async function getUserByCIN(cin) {
 }
 
 async function updateUserStatus(userId, status) {
-  await db.collection('users').doc(userId).update({
+  const userDoc = await db.collection('users').doc(userId).get();
+  const updates = {
     status,
     updated_at: new Date().toISOString()
-  });
+  };
+  if (status === 'actif' && userDoc.exists) {
+    const userData = userDoc.data();
+    if (userData.role === 'laureate') {
+      updates.profil_complete = false;
+    }
+  }
+  await db.collection('users').doc(userId).update(updates);
   return true;
 }
 
@@ -213,22 +221,74 @@ async function getStats() {
   };
 }
 
-async function createInviteCode(adminId) {
+async function createInviteCode(adminId, email) {
   const code = uuidv4().slice(0, 8).toUpperCase();
-  await db.collection('inviteCodes').doc(code).set({ used: false, admin_id: adminId, created_at: new Date().toISOString() });
+  await db.collection('inviteCodes').doc(code).set({ 
+    code,
+    email: email.toLowerCase().trim(),
+    used: false, 
+    admin_id: adminId, 
+    created_at: new Date().toISOString() 
+  });
   return code;
 }
 
-async function useInviteCode(code, agentId) {
+async function useInviteCode(code, email, agentId) {
   const doc = await db.collection('inviteCodes').doc(code).get();
-  if (!doc.exists || doc.data().used) return false;
-  await db.collection('inviteCodes').doc(code).update({ used: true, agent_id: agentId, used_at: new Date().toISOString() });
+  if (!doc.exists) return false;
+  const data = doc.data();
+  if (data.used || data.email !== email.toLowerCase().trim()) return false;
+  
+  // Expiration au bout de 5 minutes (300 secondes)
+  const elapsed = (Date.now() - new Date(data.created_at).getTime()) / 1000;
+  if (elapsed > 300) return false;
+
+  await db.collection('inviteCodes').doc(code).update({ 
+    used: true, 
+    agent_id: agentId, 
+    used_at: new Date().toISOString() 
+  });
   return true;
 }
 
-async function isInviteCodeValid(code) {
+async function isInviteCodeValid(code, email) {
   const doc = await db.collection('inviteCodes').doc(code).get();
-  return doc.exists && !doc.data().used;
+  if (!doc.exists) return false;
+  const data = doc.data();
+  if (data.used || data.email !== email.toLowerCase().trim()) return false;
+  
+  const elapsed = (Date.now() - new Date(data.created_at).getTime()) / 1000;
+  return elapsed <= 300;
+}
+
+async function isEmailAuthorized(email) {
+  const snapshot = await db.collection('laureats').where('email', '==', email.toLowerCase().trim()).limit(1).get();
+  return !snapshot.empty;
+}
+
+async function completeLaureatProfile(userId, updates) {
+  // 1. Mettre à jour l'utilisateur pour indiquer que son profil est complété
+  await db.collection('users').doc(userId).update({
+    profil_complete: true,
+    telephone: updates.telephone || '',
+    updated_at: new Date().toISOString()
+  });
+
+  // 2. Mettre à jour les informations du lauréat lié (qui a été corrigé)
+  const laureatSnapshot = await db.collection('laureats').where('user_id', '==', userId).limit(1).get();
+  if (!laureatSnapshot.empty) {
+    const laureatId = laureatSnapshot.docs[0].id;
+    await db.collection('laureats').doc(laureatId).update({
+      nom: updates.nom.trim(),
+      prenom: updates.prenom.trim(),
+      cin: updates.cin.toUpperCase().trim(),
+      filiere: updates.filiere,
+      telephone: updates.telephone || '',
+      quota_invites: parseInt(updates.quota_invites, 10),
+      updated_at: new Date().toISOString()
+    });
+  }
+  return true;
 }
 
 async function bulkImportLaureats(rows) {
@@ -266,5 +326,6 @@ module.exports = {
   registerToken, getToken, markTokenUsed, getAllActiveTokens,
   recordScan, getAllScans, getRecentScans,
   getStats,
-  createInviteCode, useInviteCode, isInviteCodeValid
+  createInviteCode, useInviteCode, isInviteCodeValid,
+  isEmailAuthorized, completeLaureatProfile
 };

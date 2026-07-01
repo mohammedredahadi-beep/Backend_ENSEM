@@ -199,20 +199,21 @@ router.get('/agents', requireAuth(['admin']), async (req, res) => {
 router.post('/agent-invite', requireAuth(['admin']), async (req, res) => {
   try {
     const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "L'adresse e-mail de l'agent est requise." });
+    }
     const adminUser = await store.getUserById(req.user.sub);
-    const code = await store.createInviteCode(req.user.sub);
+    const code = await store.createInviteCode(req.user.sub, email);
 
     let emailSent = false;
     let emailError = '';
 
-    if (email) {
-      try {
-        await sendAgentInvite(email, code, adminUser ? `${adminUser.prenom} ${adminUser.nom}` : 'Administration');
-        emailSent = true;
-      } catch (mailErr) {
-        console.error('❌ Erreur d\'envoi d\'e-mail d\'invitation:', mailErr);
-        emailError = ` (l'envoi du mail a échoué : ${mailErr.message})`;
-      }
+    try {
+      await sendAgentInvite(email, code, adminUser ? `${adminUser.prenom} ${adminUser.nom}` : 'Administration');
+      emailSent = true;
+    } catch (mailErr) {
+      console.error('❌ Erreur d\'envoi d\'e-mail d\'invitation:', mailErr);
+      emailError = ` (l'envoi du mail a échoué : ${mailErr.message})`;
     }
 
     res.json({ 
