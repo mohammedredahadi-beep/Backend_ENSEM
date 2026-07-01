@@ -331,21 +331,39 @@ async function bulkImportLaureats(rows) {
   const results = { created: 0, skipped: 0, errors: [] };
   for (const row of rows) {
     try {
-      if (!row.nom || !row.prenom || !row.email) {
-        results.errors.push({ row, reason: 'Champs obligatoires manquants' });
+      // Normaliser les clés du fichier pour supporter la casse et les espaces
+      const email = row.email || row.Email || row.EMAIL;
+      const nomComplet = row['Nom complet'] || row.nom_complet || row.NomComplet || row.nom || row.Nom || row.NOM;
+      const filiere = row.Filiere || row.filiere || row.FILIERE || 'Non spécifiée';
+      const telephone = row.telephone || row.Telephone || row.GSM || row.gsm || row.tel || null;
+      const cin = row.cin || row.CIN || row.Cin || null;
+      const quotaInvite = parseInt(row['Quota invite'] || row.quota_invite || row.quota_invites || row.Quota || 2, 10);
+
+      if (!email || !nomComplet) {
+        results.errors.push({ row, reason: "L'e-mail et le Nom complet sont requis." });
         results.skipped++;
         continue;
       }
-      const existing = await getLaureatByEmail(row.email);
+
+      // Sépare le Nom Complet en Prénom et Nom
+      const nameParts = nomComplet.trim().split(/\s+/);
+      const prenom = nameParts[0] || '';
+      const nom = nameParts.slice(1).join(' ') || prenom; // Si un seul mot, le prénom sert de nom
+
+      const existing = await getLaureatByEmail(email);
       if (existing) {
         results.skipped++;
         continue;
       }
+
       await createLaureat({
-        nom: row.nom, prenom: row.prenom, email: row.email,
-        filiere: row.filiere || 'Non spécifiée',
-        cin: row.cin || null,
-        quota_invites: parseInt(row.quota_invites, 10) || 2,
+        nom: nom.toUpperCase().trim(),
+        prenom: prenom.trim(),
+        email: email.toLowerCase().trim(),
+        filiere: filiere,
+        cin: cin ? cin.toUpperCase().trim() : null,
+        quota_invites: quotaInvite,
+        telephone: telephone ? telephone.toString().trim() : null,
         photo_url: null,
       });
       results.created++;
