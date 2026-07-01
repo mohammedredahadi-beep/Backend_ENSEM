@@ -190,11 +190,42 @@ async function recordScan(scanData) {
 
 async function getAllScans(filters = {}) {
   let query = db.collection('scans').orderBy('timestamp', 'desc');
-  if (filters.laureatId) query = query.where('laureat_id', '==', filters.laureatId);
-  if (filters.agentId) query = query.where('agent_id', '==', filters.agentId);
+  if (filters.laureatId) query = query.where('laureatId', '==', filters.laureatId);
+  if (filters.agentId) query = query.where('agentId', '==', filters.agentId);
   if (filters.action) query = query.where('action', '==', filters.action);
   const snapshot = await query.get();
-  return snapshot.docs.map(doc => doc.data());
+  
+  const scans = snapshot.docs.map(doc => doc.data());
+  
+  // Joindre les détails des lauréats et des agents
+  const enrichedScans = await Promise.all(scans.map(async (scan) => {
+    let laureatName = 'Inconnu';
+    let agentName = 'Système / Admin';
+
+    if (scan.laureatId) {
+      const laureatDoc = await db.collection('laureats').doc(scan.laureatId).get();
+      if (laureatDoc.exists) {
+        const l = laureatDoc.data();
+        laureatName = `🎓 ${l.prenom} ${l.nom}`;
+      }
+    }
+
+    if (scan.agentId) {
+      const agentDoc = await db.collection('users').doc(scan.agentId).get();
+      if (agentDoc.exists) {
+        const a = agentDoc.data();
+        agentName = `👤 ${a.prenom} ${a.nom}`;
+      }
+    }
+
+    return {
+      ...scan,
+      laureat_name: laureatName,
+      agent_name: agentName
+    };
+  }));
+
+  return enrichedScans;
 }
 
 async function getRecentScans(limitNum = 50) {
