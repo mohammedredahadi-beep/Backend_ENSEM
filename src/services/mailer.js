@@ -1,37 +1,18 @@
-const nodemailer = require('nodemailer');
-
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ceremonie-access.web.app';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ensem.ac.ma';
-const FROM_NAME = process.env.FROM_NAME || 'ENSEM ACCESS';
+const FROM_EMAIL   = process.env.FROM_EMAIL   || 'onboarding@resend.dev';  // domaine Resend gratuit
+const FROM_NAME    = process.env.FROM_NAME    || 'ENSEM ACCESS';
 
 /**
- * Crée le transporteur SMTP.
- * Variables d'environnement requises en production :
- *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
- */
-function createTransporter() {
-  if (!process.env.SMTP_USER) {
-    return null; // Mode dev : log console
-  }
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
-/**
- * Envoie un email réel via SMTP ou log console en dev.
+ * Envoie un email via l'API Resend (https://resend.com)
+ * Variable d'environnement requise : RESEND_API_KEY
+ *
+ * Plan gratuit : 3 000 emails/mois, 100/jour
  */
 async function sendEmail({ to, subject, html }) {
-  const transporter = createTransporter();
+  const apiKey = process.env.RESEND_API_KEY;
 
-  if (!transporter) {
-    // ── Mode dev : affichage console ──
+  if (!apiKey) {
+    // ── Mode dev : log console uniquement ──
     console.log('\n📧 ══════════════════════════════════════');
     console.log(`   À       : ${to}`);
     console.log(`   Sujet   : ${subject}`);
@@ -40,25 +21,35 @@ async function sendEmail({ to, subject, html }) {
     return { dev: true };
   }
 
-  // ── Mode production : envoi réel ──
-  try {
-    const info = await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to,
+  // ── Mode production : envoi via Resend API ──
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      to: [to],
       subject,
       html,
-    });
-    console.log(`✅ Email envoyé à ${to} — MessageId: ${info.messageId}`);
-    return info;
-  } catch (err) {
-    console.error(`❌ Erreur envoi email à ${to}:`, err.message);
-    throw err;
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    const msg = data?.message || JSON.stringify(data);
+    console.error(`❌ Erreur Resend (${res.status}) pour ${to}: ${msg}`);
+    throw new Error(`Resend error ${res.status}: ${msg}`);
   }
+
+  console.log(`✅ Email envoyé à ${to} via Resend — id: ${data.id}`);
+  return data;
 }
 
-/**
- * Email de vérification d'adresse email.
- */
+// ─── Templates emails ─────────────────────────────────────────────────────────
+
 async function sendEmailVerification(user, token) {
   const link = `${FRONTEND_URL}/auth/verify-email/${token}`;
   return sendEmail({
@@ -67,10 +58,10 @@ async function sendEmailVerification(user, token) {
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1e3a5f;">Bienvenue sur ENSEM ACCESS</h2>
-        <p>Bonjour ${user.prenom} ${user.nom},</p>
+        <p>Bonjour ${user.prenom || user.nom_complet || ''} ${user.nom || ''},</p>
         <p>Merci pour votre inscription. Veuillez confirmer votre adresse email en cliquant sur le bouton ci-dessous :</p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${link}" style="background: #d4a017; color: white; padding: 14px 28px; 
+          <a href="${link}" style="background: #d4a017; color: white; padding: 14px 28px;
              border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
             Vérifier mon email
           </a>
@@ -84,9 +75,6 @@ async function sendEmailVerification(user, token) {
   });
 }
 
-/**
- * Email de notification : compte approuvé + accès au pass.
- */
 async function sendAccountApproved(user, laureat) {
   const passLink = `${FRONTEND_URL}/pass`;
   return sendEmail({
@@ -95,7 +83,7 @@ async function sendAccountApproved(user, laureat) {
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1e3a5f;">Votre accès est confirmé !</h2>
-        <p>Bonjour ${user.prenom} ${user.nom},</p>
+        <p>Bonjour ${user.prenom || user.nom_complet || ''} ${user.nom || ''},</p>
         <p>Nous avons le plaisir de vous confirmer que votre inscription a été validée par l'administration de l'ENSEM.</p>
         <div style="background: #f0f7ff; border-left: 4px solid #1e3a5f; padding: 16px; margin: 20px 0; border-radius: 4px;">
           <p style="margin: 0;"><strong>Filière :</strong> ${laureat.filiere}</p>
@@ -116,9 +104,6 @@ async function sendAccountApproved(user, laureat) {
   });
 }
 
-/**
- * Email de refus de compte.
- */
 async function sendAccountRejected(user, motif) {
   return sendEmail({
     to: user.email,
@@ -126,7 +111,7 @@ async function sendAccountRejected(user, motif) {
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #c53030;">Inscription non validée</h2>
-        <p>Bonjour ${user.prenom} ${user.nom},</p>
+        <p>Bonjour ${user.prenom || user.nom_complet || ''} ${user.nom || ''},</p>
         <p>Après vérification, nous n'avons pas pu valider votre inscription pour la cérémonie de remise des diplômes.</p>
         ${motif ? `<div style="background: #fff5f5; border-left: 4px solid #c53030; padding: 16px; margin: 20px 0; border-radius: 4px;">
           <p style="margin: 0;"><strong>Motif :</strong> ${motif}</p>
@@ -139,9 +124,6 @@ async function sendAccountRejected(user, motif) {
   });
 }
 
-/**
- * Email d'invitation pour un agent de contrôle.
- */
 async function sendAgentInvite(email, inviteCode, adminNom) {
   const registerLink = `${FRONTEND_URL}/auth/register?role=agent&code=${inviteCode}`;
   return sendEmail({

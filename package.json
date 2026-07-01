@@ -19,7 +19,6 @@
     "firebase-functions": "^7.2.5",
     "jose": "^5.2.3",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.8",
     "qrcode": "^1.5.3",
     "uuid": "^9.0.0",
     "xlsx": "^0.18.5"
