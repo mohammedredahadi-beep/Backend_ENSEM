@@ -1,20 +1,37 @@
+const nodemailer = require('nodemailer');
+
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ceremonie-access.web.app';
-// Utiliser onboarding@resend.dev (domaine pré-vérifié par Resend, gratuit et fonctionnel immédiatement)
-// Pour utiliser votre propre domaine, vérifiez-le sur https://resend.com/domains
-const FROM_EMAIL   = process.env.RESEND_FROM || 'onboarding@resend.dev';
-const FROM_NAME    = process.env.FROM_NAME   || 'ENSEM ACCESS';
+const FROM_EMAIL   = process.env.FROM_EMAIL   || 'noreply@ensem.ac.ma';
+const FROM_NAME    = process.env.FROM_NAME    || 'ENSEM ACCESS';
 
 /**
- * Envoie un email via l'API Resend (https://resend.com)
- * Variable d'environnement requise : RESEND_API_KEY
- *
- * Plan gratuit : 3 000 emails/mois, 100/jour
+ * Crée le transporteur SMTP sécurisé pour l'envoi d'emails.
+ * Variables d'environnement en production :
+ *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE
+ */
+function createTransporter() {
+  if (!process.env.SMTP_USER) {
+    return null; // Mode dev : log console uniquement
+  }
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true', // true pour le port 465, false pour 587 ou autre
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
+
+/**
+ * Envoie un email en utilisant SMTP sécurisé (Nodemailer) ou log console en mode dev.
  */
 async function sendEmail({ to, subject, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const transporter = createTransporter();
 
-  if (!apiKey) {
-    // ── Mode dev : log console uniquement ──
+  if (!transporter) {
+    // ── Mode dev : affichage console ──
     console.log('\n📧 ══════════════════════════════════════');
     console.log(`   À       : ${to}`);
     console.log(`   Sujet   : ${subject}`);
@@ -23,31 +40,20 @@ async function sendEmail({ to, subject, html }) {
     return { dev: true };
   }
 
-  // ── Mode production : envoi via Resend API ──
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
-      to: [to],
+  // ── Mode production : envoi réel via SMTP ──
+  try {
+    const info = await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to,
       subject,
       html,
-    }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    const msg = data?.message || JSON.stringify(data);
-    console.error(`❌ Erreur Resend (${res.status}) pour ${to}: ${msg}`);
-    throw new Error(`Resend error ${res.status}: ${msg}`);
+    });
+    console.log(`✅ Email envoyé à ${to} — MessageId: ${info.messageId}`);
+    return info;
+  } catch (err) {
+    console.error(`❌ Erreur envoi email à ${to}:`, err.message);
+    throw err;
   }
-
-  console.log(`✅ Email envoyé à ${to} via Resend — id: ${data.id}`);
-  return data;
 }
 
 // ─── Templates emails ─────────────────────────────────────────────────────────
