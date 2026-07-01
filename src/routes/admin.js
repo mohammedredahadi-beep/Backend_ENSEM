@@ -23,14 +23,14 @@ router.post('/import', requireAuth(['admin']), upload.single('file'), async (req
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-    // Normaliser les colonnes (accepter plusieurs orthographes)
+    // Colonnes du fichier Excel : "Adresse e-mail", "Nom complet", "Filière", "Numéro de téléphone", "CIN", "Quota invite"
     const normalized = rows.map(r => ({
-      nom: r.Nom || r.nom || r.NOM || '',
-      prenom: r.Prénom || r.Prenom || r.prenom || r.PRENOM || '',
-      email: r.Email || r.email || r.EMAIL || '',
-      filiere: r.Filière || r.Filiere || r.filiere || r.FILIERE || '',
-      cin: r.CIN || r.cin || '',
-      quota_invites: r['Quota Invités'] || r.quota_invites || r.QuotaInvites || 2,
+      nom_complet: (r['Nom complet'] || r.nom_complet || '').trim(),
+      email:       r['Adresse e-mail'] || r.email || r.Email || r.EMAIL || '',
+      filiere:     r['Filière'] || r.Filiere || r.filiere || '',
+      cin:         r.CIN || r.cin || '',
+      telephone:   r['Numéro de téléphone'] || r.telephone || r.Telephone || '',
+      quota_invites: parseInt(r['Quota invite'] || r['Quota Invités'] || r.quota_invites || 2, 10),
     }));
 
     const results = await store.bulkImportLaureats(normalized);

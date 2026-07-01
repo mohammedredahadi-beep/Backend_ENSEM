@@ -150,7 +150,9 @@ async function setLaureatPassGenerated(id, value = true) {
 async function searchLaureatsByName(queryStr) {
   const q = queryStr.toLowerCase();
   const snapshot = await db.collection('laureats').get();
-  return snapshot.docs.map(doc => doc.data()).filter(l => l.nom.toLowerCase().includes(q) || l.prenom.toLowerCase().includes(q));
+  return snapshot.docs.map(doc => doc.data()).filter(l =>
+    (l.nom_complet || `${l.prenom || ''} ${l.nom || ''}`).toLowerCase().includes(q)
+  );
 }
 
 async function registerToken(jti, laureatId, expiresAt) {
@@ -206,7 +208,7 @@ async function getAllScans(filters = {}) {
       const laureatDoc = await db.collection('laureats').doc(scan.laureatId).get();
       if (laureatDoc.exists) {
         const l = laureatDoc.data();
-        laureatName = `🎓 ${l.prenom} ${l.nom}`;
+        laureatName = `🎓 ${l.nom_complet || `${l.prenom || ''} ${l.nom || ''}`.trim()}`;
       }
     }
 
@@ -331,24 +333,18 @@ async function bulkImportLaureats(rows) {
   const results = { created: 0, skipped: 0, errors: [] };
   for (const row of rows) {
     try {
-      // Normaliser les clés du fichier pour supporter la casse et les espaces
-      const email = row.email || row.Email || row.EMAIL;
-      const nomComplet = row['Nom complet'] || row.nom_complet || row.NomComplet || row.nom || row.Nom || row.NOM;
-      const filiere = row.Filiere || row.filiere || row.FILIERE || 'Non spécifiée';
-      const telephone = row.telephone || row.Telephone || row.GSM || row.gsm || row.tel || null;
-      const cin = row.cin || row.CIN || row.Cin || null;
-      const quotaInvite = parseInt(row['Quota invite'] || row.quota_invite || row.quota_invites || row.Quota || 2, 10);
+      const email       = row.email;
+      const nom_complet = row.nom_complet || '';
+      const filiere     = row.filiere || 'Non spécifiée';
+      const cin         = row.cin || null;
+      const telephone   = row.telephone || null;
+      const quotaInvite = isNaN(parseInt(row.quota_invites, 10)) ? 2 : parseInt(row.quota_invites, 10);
 
-      if (!email || !nomComplet) {
+      if (!email || !nom_complet) {
         results.errors.push({ row, reason: "L'e-mail et le Nom complet sont requis." });
         results.skipped++;
         continue;
       }
-
-      // Sépare le Nom Complet en Prénom et Nom
-      const nameParts = nomComplet.trim().split(/\s+/);
-      const prenom = nameParts[0] || '';
-      const nom = nameParts.slice(1).join(' ') || prenom; // Si un seul mot, le prénom sert de nom
 
       const existing = await getLaureatByEmail(email);
       if (existing) {
@@ -357,13 +353,12 @@ async function bulkImportLaureats(rows) {
       }
 
       await createLaureat({
-        nom: nom.toUpperCase().trim(),
-        prenom: prenom.trim(),
+        nom_complet: nom_complet.toUpperCase().trim(),
         email: email.toLowerCase().trim(),
-        filiere: filiere,
+        filiere,
         cin: cin ? cin.toUpperCase().trim() : null,
-        quota_invites: quotaInvite,
         telephone: telephone ? telephone.toString().trim() : null,
+        quota_invites: quotaInvite,
         photo_url: null,
       });
       results.created++;
